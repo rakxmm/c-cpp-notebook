@@ -1,0 +1,246 @@
+{
+  "name": "c-cpp-notebook",
+  "displayName": "C/C++ Notebook",
+  "description": "Notebooks for C and C++ built with g++/clang or CMake.",
+  "version": "0.1.0",
+  "publisher": "rakxmm",
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Notebooks",
+    "Programming Languages"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onNotebook:ccnb"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Notebook cells are compiled and executed on this machine."
+    },
+    "virtualWorkspaces": false
+  },
+  "contributes": {
+    "notebooks": [
+      {
+        "type": "ccnb",
+        "displayName": "C/C++ Notebook",
+        "selector": [
+          {
+            "filenamePattern": "*.ccnb"
+          }
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "ccNotebook.new",
+        "title": "New C/C++ Notebook",
+        "category": "C/C++ Notebook",
+        "shortTitle": "C/C++ Notebook"
+      },
+      {
+        "command": "ccNotebook.selectLanguage",
+        "title": "Select Language",
+        "category": "C/C++ Notebook"
+      },
+      {
+        "command": "ccNotebook.selectBuild",
+        "title": "Select Build Mode",
+        "category": "C/C++ Notebook"
+      },
+      {
+        "command": "ccNotebook.configureLinks",
+        "title": "Configure Linked Libraries",
+        "category": "C/C++ Notebook",
+        "icon": "$(library)"
+      },
+      {
+        "command": "ccNotebook.cleanBuild",
+        "title": "Clean Build Files",
+        "category": "C/C++ Notebook"
+      },
+      {
+        "command": "ccNotebook.toolbar.languageC",
+        "title": "Language: C",
+        "shortTitle": "C"
+      },
+      {
+        "command": "ccNotebook.toolbar.languageCpp",
+        "title": "Language: C++",
+        "shortTitle": "C++"
+      },
+      {
+        "command": "ccNotebook.toolbar.buildDirect",
+        "title": "Build: Direct",
+        "shortTitle": "Direct"
+      },
+      {
+        "command": "ccNotebook.toolbar.buildCMake",
+        "title": "Build: CMake",
+        "shortTitle": "CMake"
+      }
+    ],
+    "menus": {
+      "file/newFile": [
+        {
+          "command": "ccNotebook.new",
+          "group": "notebook"
+        }
+      ],
+      "notebook/toolbar": [
+        {
+          "command": "ccNotebook.toolbar.languageC",
+          "group": "navigation@1",
+          "when": "notebookType == ccnb && ccNotebook.language == c"
+        },
+        {
+          "command": "ccNotebook.toolbar.languageCpp",
+          "group": "navigation@1",
+          "when": "notebookType == ccnb && ccNotebook.language == cpp"
+        },
+        {
+          "command": "ccNotebook.toolbar.buildDirect",
+          "group": "navigation@2",
+          "when": "notebookType == ccnb && ccNotebook.build == direct"
+        },
+        {
+          "command": "ccNotebook.toolbar.buildCMake",
+          "group": "navigation@2",
+          "when": "notebookType == ccnb && ccNotebook.build == cmake"
+        },
+        {
+          "command": "ccNotebook.configureLinks",
+          "group": "navigation@3",
+          "when": "notebookType == ccnb"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "ccNotebook.selectLanguage",
+          "when": "notebookType == ccnb"
+        },
+        {
+          "command": "ccNotebook.selectBuild",
+          "when": "notebookType == ccnb"
+        },
+        {
+          "command": "ccNotebook.configureLinks",
+          "when": "notebookType == ccnb"
+        },
+        {
+          "command": "ccNotebook.cleanBuild",
+          "when": "notebookType == ccnb"
+        },
+        {
+          "command": "ccNotebook.toolbar.languageC",
+          "when": "false"
+        },
+        {
+          "command": "ccNotebook.toolbar.languageCpp",
+          "when": "false"
+        },
+        {
+          "command": "ccNotebook.toolbar.buildDirect",
+          "when": "false"
+        },
+        {
+          "command": "ccNotebook.toolbar.buildCMake",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "C/C++ Notebook",
+      "properties": {
+        "ccNotebook.defaultLanguage": {
+          "type": "string",
+          "enum": [
+            "c",
+            "cpp"
+          ],
+          "enumDescriptions": [
+            "C",
+            "C++"
+          ],
+          "default": "cpp",
+          "description": "Language used when opening an empty .ccnb file."
+        },
+        "ccNotebook.c.compiler": {
+          "type": "string",
+          "default": "",
+          "description": "C compiler name or path. Leave empty to find gcc or clang automatically."
+        },
+        "ccNotebook.cpp.compiler": {
+          "type": "string",
+          "default": "",
+          "description": "C++ compiler name or path. Leave empty to find g++ or clang++ automatically."
+        },
+        "ccNotebook.c.compileArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "-std=c17"
+          ],
+          "description": "Compiler flags for C notebooks."
+        },
+        "ccNotebook.cpp.compileArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "-std=c++20"
+          ],
+          "description": "Compiler flags for C++ notebooks."
+        },
+        "ccNotebook.c.linkArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "-lm"
+          ],
+          "description": "Linker flags for C notebooks."
+        },
+        "ccNotebook.cpp.linkArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Linker flags for C++ notebooks."
+        },
+        "ccNotebook.cmake.path": {
+          "type": "string",
+          "default": "",
+          "description": "CMake name or path. Leave empty to find it automatically."
+        },
+        "ccNotebook.timeoutSeconds": {
+          "type": "number",
+          "minimum": 0,
+          "default": 30,
+          "description": "Stops the compiled program after this many seconds. 0 disables the limit. Compilation is not limited."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "test": "npm run compile && node --test \"out/test/unit/*.test.js\"",
+    "test:integration": "npm run compile && node out/test/integration/runTest.js",
+    "package": "npm run compile && vsce package --no-dependencies --allow-missing-repository --skip-license"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.2.0",
+    "typescript": "^5.6.0"
+  }
+}
