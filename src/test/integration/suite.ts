@@ -186,8 +186,211 @@ async function interrupt(): Promise<void> {
   assert.match(outputText(notebook.cellAt(0), STDERR), /Cancelled/);
 }
 
+async function eventually(check: () => boolean, message: string): Promise<void> {
+  const deadline = Date.now() + 15_000;
+  while (!check()) {
+    assert.ok(Date.now() < deadline, message);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
+function hoverContents(hovers: vscode.Hover[] | undefined): string {
+  return (hovers ?? [])
+    .flatMap((hover) => hover.contents)
+    .map((content) => (typeof content === 'string' ? content : content.value))
+    .join('\n');
+}
+
+function hoverAt(cell: vscode.NotebookCell, position: vscode.Position) {
+  return vscode.commands.executeCommand<vscode.Hover[]>('vscode.executeHoverProvider', cell.document.uri, position);
+}
+
+/** Uses a stand-in for a C/C++ tool, which serves real files and never notebook cells. */
+async function intelliSense(): Promise<void> {
+  const workspace = process.env.CCNB_TEST_WORKSPACE as string;
+  const file = path.join(workspace, 'intellisense.ccnb');
+  writeFileSync(
+    file,
+    JSON.stringify({
+      version: 1,
+      language: 'c',
+      cells: [
+        { kind: 'code', source: ['#include <stdio.h>', 'int shared = 1;'] },
+        { kind: 'markdown', source: ['# Heading'] },
+        { kind: 'code', source: ['//%global', 'static int helper(void) { return 2; }'] },
+        { kind: 'code', source: ['printf("%d", shared);'] },
+      ],
+    }),
+  );
+
+  let hidden: vscode.TextDocument | undefined;
+  const selector: vscode.DocumentSelector = [
+    { scheme: 'file', language: 'c' },
+    { scheme: 'file', language: 'cpp' },
+  ];
+  const standIn = [
+    vscode.languages.registerHoverProvider(selector, {
+      provideHover(document, position) {
+        hidden = document;
+        return new vscode.Hover(
+          new vscode.MarkdownString(`${document.lineAt(position.line).text}@${position.character}`),
+          document.getWordRangeAtPosition(position),
+        );
+      },
+    }),
+    vscode.languages.registerCompletionItemProvider(
+      selector,
+      {
+        provideCompletionItems(document, position) {
+          const item = new vscode.CompletionItem(`line:${document.lineAt(position.line).text}`);
+          item.range = new vscode.Range(position.line, 0, position.line, position.character);
+          return [item];
+        },
+      },
+      '.',
+    ),
+    vscode.languages.registerDefinitionProvider(selector, {
+      provideDefinition(document) {
+        const start = document.positionAt(document.getText().indexOf('int shared'));
+        // Real tools can spell the path differently from the document, e.g. a long form on Windows.
+        const respelled = document.uri.with({ path: document.uri.path.toUpperCase() });
+        return new vscode.Location(respelled, new vscode.Range(start, start.translate(0, 10)));
+      },
+    }),
+    vscode.languages.registerSignatureHelpProvider(
+      selector,
+      {
+        provideSignatureHelp(document, position) {
+          const help = new vscode.SignatureHelp();
+          help.signatures = [new vscode.SignatureInformation(document.lineAt(position.line).text)];
+          return help;
+        },
+      },
+      '(',
+    ),
+  ];
+  const standInErrors = vscode.languages.createDiagnosticCollection('stand-in');
+
+  try {
+    // Opened as from the UI: an API reference would keep the notebook open for minutes after closing.
+    await vscode.commands.executeCommand('vscode.openWith', vscode.Uri.file(file), 'ccnb');
+    const notebook = vscode.window.activeNotebookEditor?.notebook as vscode.NotebookDocument;
+    assert.equal(notebook.uri.fsPath, vscode.Uri.file(file).fsPath);
+    const [first, , global, last] = notebook.getCells();
+
+    // Columns and the requested word map back into the cell.
+    const hovers = await hoverAt(last, new vscode.Position(0, 15));
+    assert.equal(hoverContents(hovers), 'printf("%d", shared);@15');
+    assert.deepEqual(hovers[0].range, new vscode.Range(0, 13, 0, 19));
+
+    assert.ok(hidden);
+    const program = hidden;
+    assert.equal(program.languageId, 'c');
+    assert.equal(program.uri.scheme, 'file');
+    assert.ok(
+      !vscode.window.visibleTextEditors.some((editor) => editor.document.uri.toString() === program.uri.toString()),
+      'no editor shows the hidden file',
+    );
+
+    // Hoisted and file-scope lines answer too.
+    assert.equal(hoverContents(await hoverAt(first, new vscode.Position(0, 2))), '#include <stdio.h>@2');
+    assert.equal(
+      hoverContents(await hoverAt(global, new vscode.Position(1, 12))),
+      'static int helper(void) { return 2; }@12',
+    );
+
+    // An unsaved edit in a cell reaches the tool before the request does.
+    await setSource(notebook, 3, 'shared++;\nshared.');
+    assert.equal(hoverContents(await hoverAt(last, new vscode.Position(0, 1))), 'shared++;@1');
+
+    const position = new vscode.Position(1, 7);
+    const list = await vscode.commands.executeCommand<vscode.CompletionList>(
+      'vscode.executeCompletionItemProvider',
+      last.document.uri,
+      position,
+      '.',
+    );
+    const item = list.items.find((candidate) => String(candidate.label).startsWith('line:'));
+    assert.equal(item?.label, 'line:shared.');
+    assert.deepEqual(item?.range, new vscode.Range(1, 0, 1, 7));
+
+    const definitions = await vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[]>(
+      'vscode.executeDefinitionProvider',
+      last.document.uri,
+      position,
+    );
+    const definition = definitions[0];
+    const definitionUri = 'targetUri' in definition ? definition.targetUri : definition.uri;
+    const definitionRange = 'targetUri' in definition ? definition.targetRange : definition.range;
+    assert.equal(definitionUri.toString(), first.document.uri.toString(), 'goes to the cell, not the hidden file');
+    assert.deepEqual(definitionRange, new vscode.Range(1, 0, 1, 10));
+
+    const signature = await vscode.commands.executeCommand<vscode.SignatureHelp>(
+      'vscode.executeSignatureHelpProvider',
+      last.document.uri,
+      new vscode.Position(0, 1),
+      '(',
+    );
+    assert.equal(signature.signatures[0].label, 'shared++;');
+
+    // Errors of the program show up on the cell that caused them, including generated lines.
+    const lines = program.getText().split(/\r?\n/);
+    const errorLine = lines.indexOf('shared++;');
+    const hintLine = lines.indexOf('shared.');
+    standInErrors.set(program.uri, [
+      new vscode.Diagnostic(new vscode.Range(errorLine, 0, errorLine, 6), 'in the last cell'),
+      new vscode.Diagnostic(
+        new vscode.Range(hintLine, 0, hintLine, 6),
+        'a hint',
+        vscode.DiagnosticSeverity.Hint,
+      ),
+      new vscode.Diagnostic(new vscode.Range(lines.indexOf('return 0;'), 0, lines.indexOf('return 0;'), 6), 'unbalanced'),
+    ]);
+    await eventually(() => vscode.languages.getDiagnostics(last.document.uri).length === 2, 'errors reach the cell');
+    const errors = vscode.languages.getDiagnostics(last.document.uri);
+    assert.deepEqual(errors[0].range, new vscode.Range(0, 0, 0, 6));
+    assert.equal(errors[0].message, 'in the last cell');
+    assert.equal(errors[1].message, 'unbalanced');
+    assert.equal(errors[1].range.start.line, 1, 'the closest cell line before the generated one');
+
+    standInErrors.set(program.uri, []);
+    await eventually(() => vscode.languages.getDiagnostics(last.document.uri).length === 0, 'fixed errors go away');
+
+    // VS Code opens a tab for a file that stays unsaved too long, so typing must not delay the save.
+    for (let i = 0; i < 12; i++) {
+      await setSource(notebook, 3, `shared++;\nshared.\n// ${i}`);
+      await hoverAt(last, new vscode.Position(0, 1));
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    await eventually(() => !program.isDirty, 'the hidden file gets saved');
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const tabUris = vscode.window.tabGroups.all
+      .flatMap((group) => group.tabs)
+      .map((tab) => (tab.input as { uri?: vscode.Uri } | undefined)?.uri?.toString());
+    assert.ok(!tabUris.includes(program.uri.toString()), 'no tab opens for the hidden file');
+
+    // Tools choose their mode by file extension.
+    await vscode.commands.executeCommand('ccNotebook.selectLanguage', 'cpp');
+    assert.equal(hoverContents(await hoverAt(notebook.cellAt(3), new vscode.Position(0, 1))), 'shared++;@1');
+    const cppProgram = hidden as vscode.TextDocument;
+    assert.equal(cppProgram.languageId, 'cpp');
+    assert.equal(program.getText().split(/\r?\n/).filter(Boolean).length, 1, 'the old file holds only its header');
+
+    await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+    await eventually(
+      () => cppProgram.getText().split(/\r?\n/).filter(Boolean).length === 1,
+      'closing the notebook blanks its hidden file',
+    );
+    await eventually(() => !cppProgram.isDirty, 'and leaves it saved');
+  } finally {
+    standIn.forEach((provider) => provider.dispose());
+    standInErrors.dispose();
+  }
+}
+
 export async function run(): Promise<void> {
   const tests: [string, () => Promise<void>][] = [
+    ['IntelliSense in cells', intelliSense],
     ['opening and running a file', fileFormat],
     ['switching language', languageSwitch],
     ['new cells follow the notebook language', newCellsFollowLanguage],

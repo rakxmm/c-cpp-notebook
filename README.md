@@ -7,6 +7,7 @@ Notebooks for C and C++ in VS Code, stored as `.ccnb` files. Each notebook is ei
 - VS Code 1.90 or newer
 - `gcc`/`g++` or `clang`/`clang++`
 - For the CMake build mode: CMake and either Ninja or Make
+- For IntelliSense in cells: the C/C++ extension (`ms-vscode.cpptools`)
 
 ## Installation
 
@@ -48,6 +49,14 @@ Running a cell compiles every code cell up to it into one program and runs that 
 - The program runs in the notebook's folder. Local headers and relative file paths resolve from there.
 
 Because everything runs again from the first cell, side effects repeat and time-dependent values change between runs. Outputs are not saved. Standard input is empty, so `scanf` and `cin` get end of file straight away.
+
+## IntelliSense
+
+With the [C/C++ extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cpptools) installed, cells get completions, hover, Go to Definition and parameter hints. A cell sees the includes, types and variables of the other cells, the same way the compiled program does.
+
+- The extension gives the C/C++ extension a generated file with the whole notebook, kept in VS Code's extension storage. You never need to open it, and changes made to it are overwritten.
+- Include paths and the C or C++ standard come from the C/C++ extension's own settings (`C_Cpp.default.*`), not from `ccNotebook.*.compileArgs`.
+- The C/C++ extension reports errors only for files shown in an editor, so errors in a cell appear when you run it.
 
 ## Build modes
 

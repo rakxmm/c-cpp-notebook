@@ -14,6 +14,7 @@ import {
 } from './core/format';
 import { notebookStorageDir, runNotebook } from './core/runner';
 import { ToolError } from './core/tools';
+import { registerNotebookIntelliSense } from './intellisense';
 
 const VIEW_TYPE = 'ccnb';
 
@@ -365,6 +366,11 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.workspace.registerNotebookSerializer(VIEW_TYPE, serializer, { transientOutputs: true }),
     new NotebookKernel(storageDir),
+    registerNotebookIntelliSense(
+      VIEW_TYPE,
+      path.join(context.globalStorageUri.fsPath, 'intellisense'),
+      (notebook) => settingsOf(notebook).language,
+    ),
     vscode.commands.registerCommand('ccNotebook.new', newNotebook),
     vscode.commands.registerCommand('ccNotebook.selectLanguage', selectLanguage),
     vscode.commands.registerCommand('ccNotebook.selectBuild', selectBuild),

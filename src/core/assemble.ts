@@ -19,7 +19,7 @@ const CONDITIONAL_END = /^\s*#\s*endif\b/;
 
 export const END_OF_MAIN = -1;
 
-function isGlobalCell(lines: string[]): boolean {
+export function isGlobalCell(lines: string[]): boolean {
   const first = lines.find((line) => line.trim() !== '');
   return first !== undefined && GLOBAL_MARKER.test(first);
 }
@@ -47,7 +47,7 @@ interface HoistedBlock {
  * block containing an include moves as a whole; lifting only the include would drop its
  * guard. Removed lines become blank to keep the cell's line numbers intact.
  */
-function hoistIncludes(lines: string[]): { hoisted: HoistedBlock[]; body: string[] } {
+export function hoistIncludes(lines: string[]): { hoisted: HoistedBlock[]; body: string[] } {
   const hoisted: HoistedBlock[] = [];
   const body = [...lines];
   const lift = (start: number, end: number) => {
