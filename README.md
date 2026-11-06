@@ -2,6 +2,36 @@
 
 Notebooks for C and C++ in VS Code, stored as `.ccnb` files. Each notebook is either C or C++.
 
+## Requirements
+
+- VS Code 1.90 or newer
+- `gcc`/`g++` or `clang`/`clang++`
+- For the CMake build mode: CMake and either Ninja or Make
+
+## Installation
+
+The extension is not on the Marketplace, so searching for it in the Extensions view finds nothing until it is installed. Install it from a `.vsix` package instead.
+
+Build the package from this repository:
+
+```bash
+npm ci
+```
+
+```bash
+npm run package
+```
+
+Then install the resulting file:
+
+```bash
+code --install-extension c-cpp-notebook-0.1.0.vsix
+```
+
+You can also use **Extensions > ... > Install from VSIX...** in VS Code.
+
+After that, the extension is listed in the Extensions view under `@installed C/C++ Notebook`. If a `.ccnb` file opens as plain text right after installing, close it and open it again from the Explorer.
+
 ## Usage
 
 - Create one with **File > New File > C/C++ Notebook**, or open any `.ccnb` file.
